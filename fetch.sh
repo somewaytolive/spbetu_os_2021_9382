@@ -1,0 +1,20 @@
+git fetch S1ckick         # Субботин
+git fetch somewaytolive   # Круглова
+git fetch Valentina-Gol   # Голубева
+git fetch lastrise        # Русинов
+git fetch BabylonExile    # Михайлов
+git fetch dmitryduy       # Дерюгин
+git fetch VIkDema         # Демин
+git fetch Crunchy0        # Павлов
+git fetch alexundertable  # Кодуков
+git fetch Homry           # Сорокумов
+git fetch Indiora         # Савельев
+git fetch TestGeorgeH     # Герасев
+git fetch SonKhwa         # Пя
+git fetch dmitrikuz       # Кузьмин
+git fetch MilanaBalaeva   # Балаева
+git fetch sergeyyurev     # Юрьев
+git fetch Ryzhikh-Roman   # Рыжих
+git fetch NereusOcean     # Иерусалимов
+git fetch tehril17        # Докукин
+#git fetch                # 
