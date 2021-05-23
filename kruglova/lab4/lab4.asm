@@ -1,272 +1,302 @@
-_CODE SEGMENT
-		ASSUME CS:_CODE, DS:_DATA, ES:NOTHING, SS:_STACK
-		
-ROUT 	PROC 	FAR
-		jmp 	start
-		
-		SIGNATURE 	dw 	01984h
-		KEEP_PSP 	dw	0
-		KEEP_IP 	dw 	0
-		KEEP_CS 	dw 	0 
-		INT_STACK 	dw 	100 dup (?)
-		COUNT 		dw 	0
-		KEEP_SS 	dw 	0
-		KEEP_AX		dw 	?
-		KEEP_SP 	dw 	0
-		MESSAGE 	db 'Number of calls:        $'
+CODE SEGMENT
+	ASSUME SS:AStack,DS:DATA,CS:CODE
+
+MY_INT PROC FAR
+	jmp my_int_begin
+my_int_data:
+	keep_cs dw 0
+	keep_ip dw 0
+	keep_psp dw 0
+	keep_ax dw 0
+	keep_ss dw 0
+	keep_sp dw 0
+	my_int_flag dw 0BABAh
+	my_int_stack dw 100h dup(?)
+	count dw 0
+	count_msg db 'Time 0000'
 	
-	start:
-		mov 	KEEP_SS, SS 
-		mov 	KEEP_SP, SP 
-		mov 	KEEP_AX, AX 
-		mov 	AX, seg INT_STACK 
-		mov 	SS, AX 
-		mov 	SP, 0 
-		mov 	AX, KEEP_AX
-		
-		push 	ax
-		push 	bp
-		push 	es
-		push 	ds
-		push 	dx
-		push 	di
-		
-		mov 	ax, cs
-		mov 	ds, ax 
-		mov 	es, ax 
-		mov 	ax, CS:COUNT
-		add 	ax, 1
-		mov 	CS:COUNT, ax
-		mov 	di, offset MESSAGE + 20
-		call 	WRD_TO_HEX
-		mov 	bp, offset MESSAGE
-		call 	outputBP
-		
-		pop 	di
-		pop 	dx
-		pop 	ds
-		pop 	es
-		pop 	bp
-		pop 	ax
-		mov 	al, 20h
-		out 	20h, al
-		
-		mov 	AX, KEEP_SS
-		mov 	SS, AX
-		mov 	AX, KEEP_AX
-		mov 	SP, KEEP_SP
-		
-		iret
-ROUT ENDP 
+my_int_begin:
+	mov keep_ss, ss
+	mov keep_sp, sp
+	mov keep_ax, ax
+	mov ax, seg my_int_stack
+	mov ss, ax
+	mov sp, offset my_int_stack
+	add sp, 200h
+	
+	push ax
+	push bx
+	push cx
+	push dx
+	push si
+	push ds
+	mov ax, seg my_int_data
+	mov ds, ax
 
-TETR_TO_HEX	PROC near
-		and		al,0fh
-		cmp		al,09
-		jbe		NEXT
-		add		al,07
-NEXT:	add		al,30h
-		ret
-TETR_TO_HEX	ENDP
+	;count++ and cast to str
+	inc count
+	mov ax, count
+	xor dx, dx
+	mov si, offset count_msg
+	add si, 8
+	call WRD_TO_DEC
+	
+	;save cursor
+	mov ah, 3h
+	mov bh, 0h
+	int 10h
+	push dx
+	
+	;set cursor
+	mov ah, 02h
+	mov bh, 0h
+	mov dx, 1845h	;dh = row, dl = col
+	int 10h
+	
+	;print counter
+	push es
+	push bp
+	mov ax, seg count_msg
+	mov es, ax
+	mov bp, offset count_msg
+	mov ah, 13h
+	mov al, 1
+	mov bh, 0
+	mov bl, 10	;pomenyat'
+	mov cx, 9
+	int 10h
+	pop bp
+	pop es
+	
+	;reset cursor
+	pop dx
+	mov ah, 2h
+	mov bh, 0h
+	int 10h
+	
+	pop ds
+	pop si
+	pop dx
+	pop cx
+	pop bx
+	pop ax
+	
+	mov sp, keep_sp
+	mov ax, keep_ss
+	mov ss, ax
+	mov ax, keep_ax
+	mov al, 20h
+	out 20h, al
+	iret
+MY_INT ENDP
 
-BYTE_TO_HEX	PROC near
+WRD_TO_DEC proc near
+;ax содержит исходное слово
+;si адрес поля младшей цифры
+	push ax
+	push cx
+	push dx
+	mov cx,10
+loop_wd:
+	div cx
+	or dl,30h
+	mov [si],dl
+	dec si
+	xor dx,dx
+	cmp ax,0
+	jne loop_wd
+end_l1:
+	pop dx
+	pop cx
+	pop ax
+	ret
+WRD_TO_DEC ENDP
+MY_INT_END:
 
-		push	cx
-		mov		ah,al
-		call	TETR_TO_HEX
-		xchg	al,ah
-		mov		cl,4
-		shr		al,cl
-		call	TETR_TO_HEX 
-		pop		cx 			
-		ret
-BYTE_TO_HEX	ENDP
+WriteMsg PROC near
+	push ax
+	mov ah,09h
+	int 21h
+	pop ax
+	ret
+WriteMsg ENDP
 
-WRD_TO_HEX	PROC near
+CHECK_MY_INT_UNLOADED PROC
+	push ax
+	push es
+	mov ax, keep_psp
+	mov es, ax
+	cmp byte ptr es:[82h], '/'
+	jne check_unload_end
+	cmp byte ptr es:[83h], 'u'
+	jne check_unload_end
+	cmp byte ptr es:[84h], 'n'
+	jne check_unload_end
+	mov unload_flag, 1
+check_unload_end:
+	pop es
+	pop ax
+	ret
+CHECK_MY_INT_UNLOADED ENDP
 
-		push	bx
-		mov		bh,ah
-		call	BYTE_TO_HEX
-		mov		[di],ah
-		dec		di
-		mov		[di],al
-		dec		di
-		mov		al,bh
-		xor		ah,ah
-		call	BYTE_TO_HEX
-		mov		[di],ah
-		dec		di
-		mov		[di],al
-		pop		bx
-		ret
-WRD_TO_HEX	ENDP
+CHECK_MY_INT_LOADED PROC
+	push ax
+	push si
+	; get int's segment
+	mov ah, 35h
+	mov al, 1ch
+	int 21h
+	; get signature's offset
+	mov si, offset my_int_flag
+	sub si, offset MY_INT
+	mov ax, es:[bx+si]
+	cmp ax, 0BABAh
+	jne check_load_end
+	mov load_flag, 1
+check_load_end:
+	pop si
+	pop ax
+	ret
+CHECK_MY_INT_LOADED ENDP
 
-outputBP PROC near
-		push 	ax
-		push 	bx
-		push 	dx
-		push 	cx
-		mov 	ah, 13h
-		mov 	al, 0
-		mov 	bl, 03h
-		mov 	bh, 0
-		mov 	dh, 23
-		mov 	dl, 22
-		mov 	cx, 21
-		int 	10h  
-		pop 	cx
-		pop 	dx
-		pop 	bx
-		pop 	ax
-		ret
-outputBP ENDP
-END_ROUT:
+LOAD_MY_INT PROC
+	push ax
+	push bx
+	push es
+	push dx
+	push es
+	push cx
+	
+	; save old int
+	mov ah, 35h
+	mov al, 1ch
+	int 21h
+	mov keep_ip, bx
+	mov keep_cs, es
+	
+	;set new int
+	push ds
+	mov dx, offset MY_INT
+	mov ax, seg MY_INT
+	mov ds, ax
+	mov ah, 25h
+	mov al, 1ch
+	int 21h
+	pop ds
+	
+	;make resident
+	mov dx, offset MY_INT_END
+	add dx, 10fh
+	mov cl, 4
+	shr dx, cl
+	inc dx
+	xor ax, ax
+	mov ah, 31h
+	int 21h
+	
+	pop cx
+	pop es
+	pop dx
+	pop es
+	pop bx
+	pop ax
+	ret
+LOAD_MY_INT ENDP
 
-PRINT	PROC 	near
-		push 	ax
-		mov 	ah,09h
-		int		21h
-		pop 	ax
-		ret
-PRINT	ENDP
+UNLOAD_MY_INT PROC
+	cli
+	push ax
+	push bx
+	push dx
+	push es
+	push si
+	
+	;get int's seg
+	mov ah, 35h
+	mov al, 1ch
+	int 21h
+	
+	;get int's data offset
+	mov si, offset keep_cs
+	sub si, offset MY_INT
+	
+	mov ax, es:[bx+si]		;cs
+	mov dx, es:[bx+si+2]	;ip
+	
+	push ds
+	mov ds, ax
+	mov ah, 25h
+	mov al, 1ch
+	int 21h
+	pop ds
+	
+	;free mem
+	mov es, es:[bx+si+4]
+	push es
+	mov es, es:[2ch]
+	mov ah,49h
+	int 21h
+	pop es
+	mov ah, 49h
+	int 21h
+	
+	pop si
+	pop es
+	pop dx
+	pop bx
+	pop ax
+	sti
+	ret
+UNLOAD_MY_INT ENDP
 
-CHECK_ROUT	PROC
-		mov 	ah, 35h
-		mov 	al, 1ch
-		int 	21h 
-		mov 	si, offset SIGNATURE
-		sub 	si, offset ROUT 
-		mov 	ax, 01984h
-		cmp 	ax, ES:[BX+SI] 
-		je 		ROUT_IS_LOADED
-		call 	SET_ROUT
-	ROUT_IS_LOADED:
-		call 	DELETE_ROUT
-		ret
-CHECK_ROUT	ENDP
+BEGIN PROC
+	mov ax, DATA
+	mov ds, ax
+	mov keep_psp, es
+	call CHECK_MY_INT_LOADED
+	call CHECK_MY_INT_UNLOADED
+	cmp unload_flag, 1
+	je unload
+	cmp load_flag, 0
+	je load
+	lea dx, int_exist_msg
+	call WriteMsg
+	jmp _end
+unload:
+	cmp load_flag, 0
+	je not_exist
+	call UNLOAD_MY_INT
+	lea dx, int_unload_msg
+	call WriteMsg
+	jmp _end
+not_exist:
+	lea dx, int_not_exist_msg
+	call WriteMsg
+	jmp _end
+load:
+	lea dx, int_load_msg
+	call WriteMsg
+	call LOAD_MY_INT
+	
+_end:
+	xor al, al
+	mov ah, 4ch
+	int 21h
+BEGIN ENDP
 
-SET_ROUT PROC
-		mov 	ax, KEEP_PSP 
-		mov 	es, ax
-		cmp 	byte ptr es:[80h], 0
-		je 		LOAD
-		cmp 	byte ptr es:[82h], '/'
-		jne 	LOAD
-		cmp 	byte ptr es:[83h], 'u'
-		jne     LOAD
-		cmp 	byte ptr es:[84h], 'n'
-		jne 	LOAD
-		
-		lea 	dx, NotYetLoad
-		call 	PRINT
-		jmp		EXIT
-	LOAD:
-		mov 	ah, 35h
-		mov 	al, 1ch
-		int 	21h
-		mov 	KEEP_CS, ES
-		mov 	KEEP_IP, BX
-		lea		dx, LoadResident
-		call 	PRINT
-		;interrupt vector loading
-		push 	ds
-		mov 	dx, offset ROUT
-		mov 	ax, seg ROUT
-		mov 	ds, ax
-		mov 	ah, 25h
-		mov 	al, 1ch
-		int 	21h
-		pop 	ds
-		;memory allocation
-		mov 	dx, offset END_ROUT
-		mov 	cl, 4
-		shr 	dx, cl 
-		inc 	dx
-		add 	dx,	_CODE
-		sub 	dx,	KEEP_PSP
-		sub 	al, al
-		mov 	ah, 31h
-		int 	21h
-	EXIT:
-		sub 	al, al
-		mov 	ah, 4ch
-		int 	21h
-SET_ROUT ENDP
+CODE ENDS
+	
+AStack SEGMENT STACK
+	DW 100h DUP(?)
+AStack ENDS
 
-DELETE_ROUT	PROC
-		push 	dx
-		push 	ax
-		push 	ds
-		push 	es
-		
-		mov 	ax, KEEP_PSP 
-		mov 	es, ax 
-		cmp 	byte ptr es:[80h], 0
-		je 		END_DELETE
-		cmp 	byte ptr es:[82h], '/'
-		jne 	END_DELETE
-		cmp 	byte ptr es:[83h], 'u'
-		jne 	END_DELETE
-		cmp 	byte ptr es:[84h], 'n'
-		jne 	END_DELETE
-		
-		lea		dx, UnloudResident
-		call 	PRINT
-		
-		mov 	ah, 35h
-		mov 	al, 1ch
-		int 	21h 
-		mov 	si, offset KEEP_IP
-		sub 	si, offset ROUT
-		 
-		mov 	dx, es:[bx+si]
-		mov 	ax, es:[bx+si+2]
-		mov 	ds, ax
-		mov 	ah, 25h
-		mov 	al, 1ch
-		int 	21h
-		
-		mov 	ax, es:[bx+si-2]
-		mov 	es, ax
-		mov 	ax, es:[2ch]
-		push 	es
-		mov 	es, ax
-		mov 	ah, 49h
-		int 	21h 
-		pop 	es
-		mov 	ah, 49h
-		int 	21h
+DATA SEGMENT
+	load_flag 			db 0
+	unload_flag 		db 0
+	int_load_msg 		db 'interrupt has been loaded',    13, 10, '$'
+	int_exist_msg 		db 'interrupt is already loaded',  13, 10, '$'
+	int_unload_msg 		db 'interrupt has been unloaded',  13, 10, '$'
+	int_not_exist_msg 	db "interrupt hasn't been loaded", 13, 10, '$'
+DATA ENDS
 
-		jmp END_DELETE2
-		
-		END_DELETE:
-		mov 	dx, offset AlreadyLoaded
-		call 	PRINT
-		END_DELETE2:
-		
-		pop 	es
-		pop		ds
-		pop 	ax
-		pop 	dx
-		ret	
-DELETE_ROUT	ENDP
-
-MAIN 	PROC	NEAR
-		mov 	ax, _DATA
-		mov 	ds, ax
-		mov 	KEEP_PSP, es
-		call 	CHECK_ROUT
-		mov 	ax, 4C00h
-		int 	21h
-		ret
-MAIN	ENDP
-_CODE 	ENDS
-_STACK	SEGMENT	STACK
-		db	512	dup(0)
-_STACK	ENDS
-_DATA	SEGMENT
-		LoadResident		db		'Resident was loaded!', 0dh, 0ah, '$'
-		UnloudResident		db		'Resident was unloaded!', 0dh, 0ah, '$'
-		AlreadyLoaded		db		'Resident is already loaded!', 0dh, 0ah, '$'
-		NotYetLoad 		db 		'Resident not yet loaded!', 0DH, 0AH, '$'
-_DATA 	ENDS
-		END  	MAIN 
+END BEGIN
